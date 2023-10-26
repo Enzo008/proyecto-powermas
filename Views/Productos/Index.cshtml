@@ -1,0 +1,416 @@
+﻿<!-- Layout
+   ...
+-->
+<h2>Lista de Productos</h2>
+
+<table id="productosTable" class="tabla-productos">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Nombre</th>
+            <th>Descripción</th>
+            <th>Precio</th>
+            <th>Cantidad en Stock</th>
+            <th>Fecha de Creación</th>
+            <th>Acciones</th>
+        </tr>
+    </thead>
+    <tbody id="productosTableBody">
+        <!-- Aqui se agregan los productos desde la peticion js -->
+    </tbody>
+
+</table>
+
+<div id="notification" class="notification">
+    <p id="notificationMessage"></p>
+</div>
+
+<button class="btn-nuevo" onclick="abrirModalCrear()">Crear Producto Nuevo</button>
+
+<!-- Modal 
+    Implementado con Bootstrap
+-->
+<div class="modal fade" id="productoModal" tabindex="-1" aria-labelledby="productoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="productoModalLabel">Nuevo Producto</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="productoForm">
+                <div class="modal-body">
+                    <input type="hidden" id="ID">
+                    <div class="mb-3">
+                        <label for="Nombre" class="form-label">Nombre</label>
+                        <input type="text" class="form-control" id="Nombre">
+                        <span id="NombreError" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label for="Descripcion" class="form-label">Descripción</label>
+                        <textarea class="form-control" id="Descripcion"></textarea>
+                        <span id="DescripcionError" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label for="Precio" class="form-label">Precio</label>
+                        <input type="text" step=".01" class="form-control" id="Precio">
+                        <span id="PrecioError" class="text-danger"></span>
+                    </div>
+                    <div class="mb-3">
+                        <label for="CantidadEnStock" class="form-label">Cantidad en Stock</label>
+                        <input type="text" class="form-control" id="CantidadEnStock">
+                        <span id="CantidadEnStockError" class="text-danger"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<script type="text/javascript">
+    document.addEventListener('DOMContentLoaded', function () {
+        cargarProductos();
+
+        // Agregar un controlador de eventos al formulario(Modal)
+        formProducto.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            // Verificamos si los datos ingresados son validos
+            if (!validarFormularioProducto(formProducto)) {
+                return;
+            }
+
+            var id = formProducto.elements['ID'].value;
+
+            // Determinar si se está creando o editando un producto
+            if (id) {
+                actualizarProducto();
+            } else {
+                crearProducto();
+            }
+        });
+
+
+        // Agregar controladores de eventos onchange a los campos del formulario
+        document.getElementById('Nombre').addEventListener('change', function () {
+            validarNombre(this);
+        });
+
+        document.getElementById('Descripcion').addEventListener('change', function () {
+            validarDescripcion(this);
+        });
+
+        document.getElementById('Precio').addEventListener('change', function () {
+            validarPrecio(this);
+        });
+
+        document.getElementById('CantidadEnStock').addEventListener('change', function () {
+            validarCantidadEnStock(this);
+        });
+    });
+
+    // Obtener los elementos del DOM
+    var formProducto = document.getElementById('productoForm');
+    var modalProducto = document.getElementById('modalProducto');
+    var productosTableBody = document.getElementById('productosTableBody');
+
+
+    // PETICIONES AJAX
+    function cargarProductos() {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/Productos/Listado', true);
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                var productos = JSON.parse(xhr.responseText);
+                // Limpiar el cuerpo de la tabla
+                productosTableBody.innerHTML = '';
+
+                // Verificar si la lista de productos está vacía
+                if (productos.length === 0) {
+                    // Si está vacía, mostrar un mensaje en la tabla
+                    productosTableBody.innerHTML = '<tr><td colspan="7">No hay registros para mostrar</td></tr>';
+                } else {
+                    // Si no está vacía, agregar una fila a la tabla por cada producto
+                    productos.forEach(function (producto) {
+                        var row = productosTableBody.insertRow();
+                        row.setAttribute('data-id', producto.id); // Agregar el atributo data-id a la fila
+                        var fechaDeCreacion = new Date(producto.fechaDeCreacion).toLocaleDateString();
+                        row.innerHTML = `
+                            <td>${producto.id}</td>
+                            <td>${producto.nombre}</td>
+                            <td>${producto.descripcion}</td>
+                            <td>$ ${producto.precio}</td>
+                            <td>${producto.cantidadEnStock}</td>
+                            <td>${fechaDeCreacion}</td>
+                            <td>
+                                <button class="btn-editar" onclick="abrirModalEditar(${producto.id})">Editar</button>
+                                <button class="btn-eliminar" onclick="eliminarProducto(${producto.id})">Eliminar</button>
+                            </td>
+                        `;
+                    });
+                }
+            }
+        };
+
+        xhr.send();
+    }
+
+
+    function crearProducto() {
+        // Obtener los valores de los campos del formulario
+        var nombre = formProducto.elements['Nombre'].value;
+        var descripcion = formProducto.elements['Descripcion'].value;
+        var precio = parseFloat(formProducto.elements['Precio'].value);
+        var cantidadEnStock = parseInt(formProducto.elements['CantidadEnStock'].value);
+
+        // Crear un objeto Producto con los valores del formulario
+        var producto = {
+            Nombre: nombre,
+            Descripcion: descripcion,
+            Precio: precio,
+            CantidadEnStock: cantidadEnStock
+        };
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/Productos/Create', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify(producto));
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                var respuesta = JSON.parse(xhr.responseText);
+                if (respuesta.success) {
+                    // Recargar la lista de productos
+                    cargarProductos();
+                    // Cerrar el modal
+                    var modal = bootstrap.Modal.getInstance(document.getElementById('productoModal'));
+                    modal.hide();
+                    // Mostrar la notificación
+                    showNotification('Producto guardado con éxito');
+                } else {
+                    // Mostrar los errores de validación (Servidor)
+                    respuesta.errors.forEach(function (error) {
+                        var inputElement = document.getElementById(error.fieldName);
+                        var errorElement = document.getElementById(error.fieldName + 'Error');
+                        if (inputElement && errorElement) {
+                            inputElement.classList.add('error');
+                            errorElement.textContent = error.errorMessage;
+                        }
+                    });
+                }
+            }
+        };
+    }
+
+    function actualizarProducto() {
+        // Obtener los valores de los campos del formulario
+        var id = formProducto.elements['ID'].value;
+        var nombre = formProducto.elements['Nombre'].value;
+        var descripcion = formProducto.elements['Descripcion'].value;
+        var precio = parseFloat(formProducto.elements['Precio'].value);
+        var cantidadEnStock = parseInt(formProducto.elements['CantidadEnStock'].value);
+
+        // Crear un objeto Producto con los valores del formulario
+        var producto = {
+            ID: id,
+            Nombre: nombre,
+            Descripcion: descripcion,
+            Precio: precio,
+            CantidadEnStock: cantidadEnStock
+        };
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/Productos/Edit', true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify(producto));
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                var respuesta = JSON.parse(xhr.responseText);
+                if (respuesta.success) {
+                    // Recargar la lista de productos
+                    cargarProductos();
+                    // Cerrar el modal
+                    var modal = bootstrap.Modal.getInstance(document.getElementById('productoModal'));
+                    modal.hide();
+
+                    showNotification('Producto Actualizado con éxito');
+                } else {
+                    // Mostrar los errores de validación (Servidor)
+                    respuesta.errors.forEach(function (error) {
+                        var inputElement = document.getElementById(error.fieldName);
+                        var errorElement = document.getElementById(error.fieldName + 'Error');
+                        if (inputElement && errorElement) {
+                            inputElement.classList.add('error');
+                            errorElement.textContent = error.errorMessage;
+                        }
+                    });
+                }
+            }
+        };
+    }
+
+    function eliminarProducto(id) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/Productos/Delete', true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.send(`id=${encodeURIComponent(id)}`);
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                var respuesta = JSON.parse(xhr.responseText);
+                if (respuesta.success) {
+                    showNotification('Producto Eliminado con éxito');
+                    // Recargar la lista de productos
+                    cargarProductos();
+                } else {
+                    // Mostrar un mensaje de error(Servidor)
+                    alert(respuesta.error);
+                }
+            }
+        };
+    }
+    ////
+
+    // INTERACCION MODAL
+    function abrirModalEditar(id) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/Productos/ObtenerProducto?id=' + id, true);
+
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                var producto = JSON.parse(xhr.responseText);
+
+                // Cargar los datos del producto en el modal
+                document.querySelector("#ID").value = producto.id;
+                document.querySelector("#Nombre").value = producto.nombre;
+                document.querySelector("#Descripcion").value = producto.descripcion;
+                document.querySelector("#Precio").value = producto.precio;
+                document.querySelector("#CantidadEnStock").value = producto.cantidadEnStock;
+
+                // Limpiar los mensajes de error y restablecer los estilos
+                var campos = ['Nombre', 'Descripcion', 'Precio', 'CantidadEnStock'];
+                campos.forEach(function(campo) {
+                    document.getElementById(campo + 'Error').textContent = '';
+                    document.getElementById(campo).classList.remove('error');
+                });
+
+                // Cambiar el título del modal
+                document.querySelector("#productoModalLabel").textContent = "Editar Producto";
+
+                // Mostrar el modal
+                var modal = new bootstrap.Modal(document.getElementById('productoModal'));
+                modal.show();
+            }
+        };
+
+        xhr.send();
+    }
+    function abrirModalCrear() {
+        // Limpiar los campos del formulario
+        document.querySelector("#ID").value = "";
+        document.querySelector("#Nombre").value = "";
+        document.querySelector("#Descripcion").value = "";
+        document.querySelector("#Precio").value = "";
+        document.querySelector("#CantidadEnStock").value = "";
+
+        // Limpiar los mensajes de error y restablecer los estilos
+        var campos = ['Nombre', 'Descripcion', 'Precio', 'CantidadEnStock'];
+        campos.forEach(function (campo) {
+            document.getElementById(campo + 'Error').textContent = '';
+            document.getElementById(campo).classList.remove('error');
+        });
+
+        // Cambiar el título del modal
+        document.querySelector("#productoModalLabel").textContent = "Nuevo Producto";
+
+        // Mostrar el modal
+        var modal = new bootstrap.Modal(document.getElementById('productoModal'));
+        modal.show();
+    }
+
+
+
+    // VALIDACIONES FORMULARIO(MODAL)
+    function validarNombre(input) {
+        var nombre = input.value;
+        if (!nombre || nombre.length < 2) {
+            document.getElementById('NombreError').textContent = 'Por favor, introduce un nombre con al menos 2 caracteres';
+            input.classList.add('error');
+            return false;
+        } else {
+            document.getElementById('NombreError').textContent = '';
+            input.classList.remove('error');
+            return true;
+        }
+    }
+
+    function validarDescripcion(input) {
+        var descripcion = input.value;
+        if (!descripcion || descripcion.length < 5) {
+            document.getElementById('DescripcionError').textContent = 'Por favor, introduce una descripción con al menos 5 caracteres';
+            input.classList.add('error');
+            return false;
+        } else {
+            document.getElementById('DescripcionError').textContent = '';
+            input.classList.remove('error');
+            return true;
+        }
+    }
+
+    function validarPrecio(input) {
+        var precio = input.value;
+        var precioRegex = /^\d+(\.\d{1,2})?$/;
+        if (!precioRegex.test(precio)) {
+            document.getElementById('PrecioError').textContent = 'Por favor, introduce un precio válido. Solo se permiten números decimales con un punto.';
+            input.classList.add('error');
+            return false;
+        } else {
+            document.getElementById('PrecioError').textContent = '';
+            input.classList.remove('error');
+            return true;
+        }
+    }
+
+    function validarCantidadEnStock(input) {
+        var cantidadEnStock = input.value;
+        var cantidadEnStockRegex = /^\d+$/; // Esta expresión regular solo acepta números enteros
+        if (!cantidadEnStockRegex.test(cantidadEnStock) || cantidadEnStock < 0) {
+            document.getElementById('CantidadEnStockError').textContent = 'Por favor, introduce cantidad en stock válida mayor o igual a 0';
+            input.classList.add('error');
+            return false;
+        } else {
+            document.getElementById('CantidadEnStockError').textContent = '';
+            input.classList.remove('error');
+            return true;
+        }
+    }
+
+
+    function validarFormularioProducto(formProducto) {
+        var esNombreValido = validarNombre(document.getElementById('Nombre'));
+        var esDescripcionValida = validarDescripcion(document.getElementById('Descripcion'));
+        var esPrecioValido = validarPrecio(document.getElementById('Precio'));
+        var esCantidadEnStockValida = validarCantidadEnStock(document.getElementById('CantidadEnStock'));
+
+        return esNombreValido && esDescripcionValida && esPrecioValido && esCantidadEnStockValida;
+    }
+    //////
+
+
+    // NOTIFICACION
+    function showNotification(message) {
+        var notification = document.querySelector('#notification');
+        var notificationMessage = document.querySelector('#notificationMessage');
+
+        notificationMessage.textContent = message; // Establece el mensaje de la notificación
+        notification.style.display = "block"; // Muestra la notificación
+
+        setTimeout(function () {
+            notification.style.display = "none"; // Oculta la notificación después de 3 segundos
+        }, 3000);
+    }
+</script>
